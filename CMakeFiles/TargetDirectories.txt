@@ -1,0 +1,3 @@
+/home/andrei/port_scanner/CMakeFiles/port_scanner.dir
+/home/andrei/port_scanner/CMakeFiles/edit_cache.dir
+/home/andrei/port_scanner/CMakeFiles/rebuild_cache.dir
