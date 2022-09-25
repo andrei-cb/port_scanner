@@ -3,11 +3,13 @@
 #include <boost/asio/basic_raw_socket.hpp>
 namespace asio = boost::asio;
 
-#include "icmp_header.hpp"
 #include "ipv4_header.hpp"
 #include "tcp_header.hpp"
 #include "raw.hpp"
 #include <iostream>
+#include <list>
+#include "cxxopts.hpp"
+#include <boost/format.hpp>
 
 using asio::steady_timer;
 using asio::ip::icmp;
@@ -16,22 +18,22 @@ using asio::ip::udp;
 
 namespace chrono = asio::chrono;
 
-class pinger
+class port_scanner
 {
   public:
-    pinger(asio::io_context &io_context, boost::asio::io_service &io_service, const char *destination)
-        : socket_(io_service), timer_(io_service), sequence_number_(0),
-          num_replies_(0)
+    port_scanner(boost::asio::io_service &io_service, std::string ip, std::vector<uint16_t> ports)
+        : raw_socket(io_service), 
+          recv_timer(io_service),
+          ip_address(ip),
+          ports(ports)
+    {
+
+    }
+
+    void run()
     {
         start_send();
         start_receive();
-    }
-
-    std::string get()
-    {
-        auto r = _output.str();
-        _output.str("");
-        return r;
     }
 
   private:
@@ -49,14 +51,11 @@ class pinger
 
     void start_send()
     {
-        std::string body("");
+        std::string body(""); //to remove
+        uint16_t port_to_scan = ports[0];
 
-        uint16_t port_to_scan = 80;
-
-        boost::asio::ip::address destination_addr = boost::asio::ip::make_address("192.168.88.1");
+        boost::asio::ip::address destination_addr = boost::asio::ip::make_address(ip_address);
         
-
-        // Create an ICMP header for an echo request.
         tcp_header syn_packet;
         syn_packet.set_sourceport(port_to_scan);
         syn_packet.set_destport(port_to_scan);
@@ -69,51 +68,53 @@ class pinger
         syn_packet.set_urgent_ptr(0);
         syn_packet.set_options();
 
-        syn_packet.destination_addr = destination_addr;
-        syn_packet.source_addr = get_local_address();
+        syn_packet.set_dst_ip(destination_addr);
+        syn_packet.set_src_ip(get_local_address());
 
         compute_checksum(syn_packet, body.begin(), body.end());
-
-        boost::asio::streambuf request_buffer;
-	    std::ostream os(&request_buffer);
-	    os << syn_packet << body;
-        // Encode the request packet.
 
         asio::ip::raw::endpoint test(destination_addr.to_v4(), port_to_scan);
         ep = test;
 
         try {
-		    socket_.open();
+		    raw_socket.open();
 
             time_sent_ = steady_timer::clock_type::now();
-		    socket_.send_to(request_buffer.data(), ep);
 
-            num_replies_ = 0;
-            timer_.expires_at(time_sent_ + chrono::seconds(5));
-            timer_.async_wait(boost::bind(&pinger::handle_timeout, this));  
+            for (auto port : ports)
+            {
+                boost::asio::streambuf request_buffer;
+	            std::ostream os(&request_buffer);
+                syn_packet.set_destport(port);
+                syn_packet.set_sourceport(port);
+                syn_packet.set_checksum(0);
+                compute_checksum(syn_packet, body.begin(), body.end());
+	            os << syn_packet << body;
+
+                std::cout << "Sending packet to port " << syn_packet.get_destport() << "\n";
+                raw_socket.send_to(request_buffer.data(), ep);
+            }
+
+            recv_timer.expires_at(time_sent_ + chrono::seconds(5));
+            recv_timer.async_wait(boost::bind(&port_scanner::handle_timeout, this));  
 	    } catch (std::exception& e) {
-		    std::cerr << "Error: " << e.what() << std::endl;
+		    std::cout << "Error: " << e.what() << std::endl;
 	    }
     }
 
     void handle_timeout()
     {
-        if (num_replies_ == 0)
-        {
-            socket_.cancel(); // _output is set in response to error_code
-        }
+        //std::cout << "called handle_timeout()\n";
+        raw_socket.cancel();
     }
 
     void start_receive()
     {
-        //std::cout << "start_receive()\n";
-        // Discard any data already in the buffer.
-
         reply_buffer_.consume(reply_buffer_.size());
 
         // Wait for a reply. We prepare the buffer to receive up to 64KB.
-        socket_.async_receive_from(reply_buffer_.prepare(65536), ep,
-                              boost::bind(&pinger::handle_receive, this, boost::asio::placeholders::error(),
+        raw_socket.async_receive_from(reply_buffer_.prepare(65536), ep,
+                              boost::bind(&port_scanner::handle_receive, this, boost::asio::placeholders::error(),
                                           boost::asio::placeholders::bytes_transferred()));
     }
 
@@ -124,11 +125,11 @@ class pinger
         {
             if (ec == boost::asio::error::operation_aborted)
             {
-                _output << "Request timed out";
+               // std::cout << "Request timed out";
             }
             else
             {
-                _output << "error: " << ec.message();
+                //std::cout << "error: " << ec.message();
             }
             return;
         }
@@ -141,12 +142,12 @@ class pinger
         tcp_header tcp_hdr;
         is >> ipv4_hdr >> tcp_hdr;
         uint8_t proto = ipv4_hdr.protocol();
-        if (is && (proto == 0x06) && ipv4_hdr.source_address() == boost::asio::ip::make_address_v4("192.168.88.1") && tcp_hdr.get_destport() == 80)
+        if (is && 
+           (proto == 0x06) && 
+           (ipv4_hdr.source_address() == boost::asio::ip::make_address_v4(ip_address)) && 
+           (std::any_of(ports.begin(), ports.end(), [&tcp_hdr](uint16_t val){ return val == tcp_hdr.get_destport(); })))
         {
-            std::cout << "received reply!\n";
-            std::cout << "length = " << length << "\n";
-            std::cout << "src ip = " << ipv4_hdr.source_address() << std::endl;
-            std::cout << "port = " << tcp_hdr.get_destport() << std::endl;
+            std::cout << boost::format("Port %d is opened for ip address %s\n") % tcp_hdr.get_destport() % ip_address;
         }
 
         start_receive();
@@ -161,37 +162,48 @@ class pinger
 #endif
     }
 
-    std::ostringstream _output;
+    std::string ip_address;
+    std::vector<uint16_t> ports;
     boost::asio::io_service io_service;
-    boost::asio::basic_raw_socket<asio::ip::raw> socket_;
+    boost::asio::basic_raw_socket<asio::ip::raw> raw_socket;
     icmp::endpoint destination_;
-    steady_timer timer_;
-    unsigned short sequence_number_;
+    steady_timer recv_timer;
     chrono::steady_clock::time_point time_sent_;
     asio::streambuf reply_buffer_;
     std::size_t num_replies_;
     asio::ip::raw::endpoint ep;
 };
 
-#include <iostream>
-#include <list>
+
 int main(int argc, char **argv)
 {
-    asio::io_context io_context;
     boost::asio::io_service io_service;
+    std::string ip_address;
+    std::vector<uint16_t> ports;
 
-    std::list<pinger> pingers;
-    for (char const *arg : std::vector(argv + 1, argv + argc))
+    try{
+        cxxopts::Options options("port_scanner", "Simple port scanner");
+
+        options.add_options()
+        ("ip", "IP address to scan", cxxopts::value<std::string>(ip_address))
+        ("p,ports", "List of ports to scan separated by \",\"", cxxopts::value<std::vector<std::uint16_t>>(ports))
+        ("h,help", "Print usage");
+
+        auto result = options.parse(argc, argv);
+
+        if (result.count("help") || !result.count("ip") || !result.count("ports"))
+        {
+            std::cout << options.help() << std::endl;
+            std::exit(0);
+        }
+    } catch (const cxxopts::exceptions::exception& e)
     {
-        pingers.emplace_back(io_context, io_service, arg);
+        std::cout << "error parsing options: " << e.what() << std::endl;
+        std::exit(1);
     }
+
+    port_scanner ps(io_service, ip_address, ports);
+    ps.run();
 
     io_service.run();
-    //io_context.run();
-   
-
-    for (auto &p : pingers)
-    {
-        std::cout << p.get() << std::endl;
-    }
 }

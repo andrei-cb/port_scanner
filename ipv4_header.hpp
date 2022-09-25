@@ -53,86 +53,82 @@ class ipv4_header
   public:
     ipv4_header()
     {
-        std::fill(rep_, rep_ + sizeof(rep_), 0);
+        std::fill(raw_buff, raw_buff + sizeof(raw_buff), 0);
     }
 
     unsigned char version() const
     {
-        return (rep_[0] >> 4) & 0xF;
+        return (raw_buff[0] >> 4) & 0xF;
     }
     unsigned short header_length() const
     {
-        return (rep_[0] & 0xF) * 4;
+        return (raw_buff[0] & 0xF) * 4;
     }
     unsigned char type_of_service() const
     {
-        return rep_[1];
+        return raw_buff[1];
     }
     unsigned short total_length() const
     {
-        return decode(2, 3);
+        return (raw_buff[2] << 8) + raw_buff[3];
     }
     unsigned short identification() const
     {
-        return decode(4, 5);
+        return (raw_buff[4] << 8) + raw_buff[5];
     }
     bool dont_fragment() const
     {
-        return (rep_[6] & 0x40) != 0;
+        return (raw_buff[6] & 0x40) != 0;
     }
     bool more_fragments() const
     {
-        return (rep_[6] & 0x20) != 0;
+        return (raw_buff[6] & 0x20) != 0;
     }
     unsigned short fragment_offset() const
     {
-        return decode(6, 7) & 0x1FFF;
+        return ((raw_buff[6] << 8) + raw_buff[7]) & 0x1FFF;
     }
     unsigned int time_to_live() const
     {
-        return rep_[8];
+        return raw_buff[8];
     }
     unsigned char protocol() const
     {
-        return rep_[9];
+        return raw_buff[9];
     }
     unsigned short header_checksum() const
     {
-        return decode(10, 11);
+        return (raw_buff[10] << 8) + raw_buff[11];
     }
 
     boost::asio::ip::address_v4 source_address() const
     {
-        boost::asio::ip::address_v4::bytes_type bytes = {{rep_[12], rep_[13], rep_[14], rep_[15]}};
+        boost::asio::ip::address_v4::bytes_type bytes = {{raw_buff[12], raw_buff[13], raw_buff[14], raw_buff[15]}};
         return boost::asio::ip::address_v4(bytes);
     }
 
     boost::asio::ip::address_v4 destination_address() const
     {
-        boost::asio::ip::address_v4::bytes_type bytes = {{rep_[16], rep_[17], rep_[18], rep_[19]}};
+        boost::asio::ip::address_v4::bytes_type bytes = {{raw_buff[16], raw_buff[17], raw_buff[18], raw_buff[19]}};
         return boost::asio::ip::address_v4(bytes);
     }
 
     friend std::istream &operator>>(std::istream &is, ipv4_header &header)
     {
-        is.read(reinterpret_cast<char *>(header.rep_), 20);
+        is.read(reinterpret_cast<char *>(header.raw_buff), 20);
         if (header.version() != 4)
             is.setstate(std::ios::failbit);
         std::streamsize options_length = header.header_length() - 20;
         if (options_length < 0 || options_length > 40)
             is.setstate(std::ios::failbit);
         else
-            is.read(reinterpret_cast<char *>(header.rep_) + 20, options_length);
+            is.read(reinterpret_cast<char *>(header.raw_buff) + 20, options_length);
         return is;
     }
 
   private:
-    unsigned short decode(int a, int b) const
-    {
-        return (rep_[a] << 8) + rep_[b];
-    }
 
-    unsigned char rep_[60];
+    unsigned char raw_buff[60];
 };
 
 #endif // IPV4_HEADER_HPP

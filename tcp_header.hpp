@@ -15,7 +15,6 @@
 #include <ostream>
 #include <boost/endian/conversion.hpp>
 #include <boost/format.hpp>
-using asio::ip::udp;
 #include <iostream>
 
 //  0              8               16                             31
@@ -152,9 +151,22 @@ class tcp_header
         return os.write(reinterpret_cast<const char *>(&header.raw_buff), 24);
     }
 
+    template <typename Iterator> friend void compute_checksum(tcp_header &header, Iterator body_begin, Iterator body_end);
+
+    void set_dst_ip(boost::asio::ip::address dst_ip) {
+        destination_addr = dst_ip;
+    }
+
+    void set_src_ip(boost::asio::ip::address src_ip) {
+        source_addr = src_ip;
+    }
+
+private:
     unsigned char raw_buff[24] = {0};
     boost::asio::ip::address destination_addr;
     boost::asio::ip::address source_addr;
+
+
 };
 
 template <typename Iterator> void compute_checksum(tcp_header &header, Iterator body_begin, Iterator body_end)

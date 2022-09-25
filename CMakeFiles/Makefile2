@@ -64,15 +64,47 @@ CMAKE_BINARY_DIR = /home/andrei/port_scanner
 
 # The main recursive "all" target.
 all: CMakeFiles/port_scanner.dir/all
+all: cxxopts/all
 .PHONY : all
 
 # The main recursive "preinstall" target.
-preinstall:
+preinstall: cxxopts/preinstall
 .PHONY : preinstall
 
 # The main recursive "clean" target.
 clean: CMakeFiles/port_scanner.dir/clean
+clean: cxxopts/clean
 .PHONY : clean
+
+#=============================================================================
+# Directory level rules for directory cxxopts
+
+# Recursive "all" directory target.
+cxxopts/all: cxxopts/include/all
+.PHONY : cxxopts/all
+
+# Recursive "preinstall" directory target.
+cxxopts/preinstall: cxxopts/include/preinstall
+.PHONY : cxxopts/preinstall
+
+# Recursive "clean" directory target.
+cxxopts/clean: cxxopts/include/clean
+.PHONY : cxxopts/clean
+
+#=============================================================================
+# Directory level rules for directory cxxopts/include
+
+# Recursive "all" directory target.
+cxxopts/include/all:
+.PHONY : cxxopts/include/all
+
+# Recursive "preinstall" directory target.
+cxxopts/include/preinstall:
+.PHONY : cxxopts/include/preinstall
+
+# Recursive "clean" directory target.
+cxxopts/include/clean:
+.PHONY : cxxopts/include/clean
 
 #=============================================================================
 # Target rules for target CMakeFiles/port_scanner.dir
