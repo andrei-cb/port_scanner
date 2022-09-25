@@ -1,7 +1,0 @@
-/home/andrei/port_scanner/CMakeFiles/port_scanner.dir
-/home/andrei/port_scanner/CMakeFiles/edit_cache.dir
-/home/andrei/port_scanner/CMakeFiles/rebuild_cache.dir
-/home/andrei/port_scanner/cxxopts/CMakeFiles/edit_cache.dir
-/home/andrei/port_scanner/cxxopts/CMakeFiles/rebuild_cache.dir
-/home/andrei/port_scanner/cxxopts/include/CMakeFiles/edit_cache.dir
-/home/andrei/port_scanner/cxxopts/include/CMakeFiles/rebuild_cache.dir
